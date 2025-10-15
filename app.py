@@ -1,10 +1,18 @@
-from flask import Flask, render_template, request, redirect, url_for
+import yfinance as yf
+from flask import Flask, render_template, request, redirect, url_for, flash
 from flask_sqlalchemy import SQLAlchemy
-from werkzeug.security import generate_password_hash, check_password_hash
+from flask_login import LoginManager, login_user, login_required, current_user, logout_user
+from models import User, Investimento  # Certifique-se que o models.py exista
+from werkzeug.security import check_password_hash
+from datetime import datetime
+from utils import gerar_relatorio_llm  # Certifique-se que o utils.py exista e tenha essa função
 import os
+import plotly.express as px # Importar aqui para que o Flask não tente importar depois que o Gunicorn iniciar
+
+# importa o db de extensions, não de models
+from extensions import db # Certifique-se que o extensions.py exista
 
 app = Flask(__name__)
-
 
 # Tenta carregar a URL do BD da variável de ambiente (DATABASE_URL) que o Render ou Heroku irá fornecer.
 # Se a variável não existir (rodando localmente), usa sua config local de fallback.
@@ -13,80 +21,185 @@ app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get(
     'postgresql://devuser:devsenha@localhost:5432/flaskdb'
 )
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-db = SQLAlchemy(app)
 
-# Modelo de usuário
-class User(db.Model):
-    __tablename__ = 'usuarios'
-    id = db.Column(db.Integer, primary_key=True)
-    username = db.Column(db.Text, unique=True, nullable=False)
-    password_hash = db.Column(db.Text, nullable=False)
+db.init_app(app)  # inicializa SQLAlchemy com app
 
-    def set_password(self, password):
-        self.password_hash = generate_password_hash(password)
-
-    def check_password(self, password):
-        return check_password_hash(self.password_hash, password)
-    
+# ⚠️ CORREÇÃO CRÍTICA PARA O RENDER FREE:
+# Este bloco cria as tabelas no BD remoto na primeira vez que o servidor inicia (via Gunicorn).
 with app.app_context():
     db.create_all()
+# -----------------------------------------------------------------
+
+app.secret_key = 'univesppi2'
+
+def get_cotacao_atual(ticker):
+    try:
+        tk = yf.Ticker(ticker)
+        # Pega histórico diário mais recente
+        hist = tk.history(period="1d")
+        if not hist.empty:
+            # Último preço de fechamento
+            return float(hist['Close'][-1])
+        else:
+            return 0
+    except Exception as e:
+        print(f"Erro ao pegar cotação: {e}")
+        return 0
+
+# --------------------LOGIN---------------------
+
+login_manager = LoginManager(app)
+login_manager.login_view = "login"  # se usuário não estiver logado redireciona para login
+
+@login_manager.user_loader
+def load_user(user_id):
+    return User.query.get(int(user_id))
+
+# -------------------- ROTAS --------------------
 
 @app.route("/")
 def home():
-    # renderiza a página HTML que está dentro da pasta templates
-    return render_template("home.html")
+    # ⚠️ Use a correção do Bootstrap aqui:
+    return render_template("home.html") 
 
-#Tela de cadastro
 @app.route("/register", methods=["GET", "POST"])
 def register():
-    if request.method == "POST":
-        usuario = request.form["usuario"]
-        senha = request.form["senha"]
+    if request.method == "POST":
+        usuario = request.form["usuario"]
+        email = request.form["email"] # Adicionado
+        senha = request.form["senha"]
+        confirm_senha = request.form["confirm_senha"] # Adicionado
 
-        # Verifica se já existe
-        existing_user = User.query.filter_by(username=usuario).first()
-        if existing_user:
-            return render_template("register.html", erro="Usuário já existe!")
+        if senha != confirm_senha:
+            return render_template("register.html", erro="As senhas não conferem!")
 
-        novo_user = User(username=usuario)
-        novo_user.set_password(senha)
-        db.session.add(novo_user)
-        db.session.commit()
+        existing_user = User.query.filter_by(username=usuario).first()
+        if existing_user:
+            return render_template("register.html", erro="Usuário já existe!")
 
-        return redirect(url_for("login"))
+        novo_user = User(username=usuario, email=email)
+        novo_user.set_password(senha)
+        db.session.add(novo_user)
+        db.session.commit()
 
-    return render_template("register.html")
+        return redirect(url_for("login"))
 
-# Tela de login
+    return render_template("register.html")
+
 @app.route("/login", methods=["GET", "POST"])
 def login():
-    if request.method == "POST":
-        usuario = request.form["usuario"]
-        senha = request.form["senha"]
+    if request.method == "POST":
+        username = request.form["usuario"]
+        password = request.form["senha"]
+        user = User.query.filter_by(username=username).first()
+        if user and user.check_password(password):
+            login_user(user)
+            return redirect(url_for("dashboard"))
+        else:
+            flash("Usuário ou senha inválidos")
+    return render_template("login.html")
 
-        user = User.query.filter_by(username=usuario).first()
+@app.route("/logout")
+@login_required
+def logout():
+    logout_user()
+    return redirect(url_for("login"))
 
-        if user and user.check_password(senha):
-            return redirect(url_for("dashboard"))
-        else:
-            return render_template("login.html", erro="Usuário ou senha incorretos")
-    return render_template("login.html")
+@app.route("/dashboard", methods=["GET", "POST"])
+@login_required
 
-
-# Página inicial do dashboard
-@app.route("/dashboard")
 def dashboard():
-    # Dados fictícios de ações do usuário
-    acoes_usuario = [
-        {"ticker": "AAPL", "preco": 182.30, "variacao": "+1.25%"},
-        {"ticker": "TSLA", "preco": 230.15, "variacao": "-0.85%"},
-        {"ticker": "AMZN", "preco": 145.90, "variacao": "+0.40%"},
-    ]
-    return render_template("dashboard.html", acoes=acoes_usuario)
+
+    data_atual = datetime.now()  # note que precisa usar datetime.datetime
+
+    if request.method == "POST":
+        nome = request.form["nome"]
+        ticker = request.form["codigo_BVMF"].upper() + ".SA"
+        quantidade = float(request.form["cotas"])
+        valor_pago = float(request.form["valor_pago"])
 
 
-if __name__ == "__main__":
-    # Cria as tabelas no banco se não existirem
-    with app.app_context():
-        db.create_all()
-    app.run(debug=True)
+
+        cotacao = get_cotacao_atual(ticker)
+
+        saldo = cotacao * quantidade
+        lucro_prejuizo = saldo - valor_pago
+
+        novo = Investimento(
+            ticker=ticker,
+            nome=ticker,
+            quantidade=quantidade,
+            valor_pago=valor_pago,
+            cotacao_atual=cotacao,
+            saldo=saldo,
+            lucro_prejuizo=lucro_prejuizo,
+            user_id=current_user.id
+        )
+
+        db.session.add(novo)
+        db.session.commit()
+        return redirect(url_for("dashboard"))
+
+    # listar os investimentos do usuário
+    investimentos = Investimento.query.filter_by(user_id=current_user.id).all()
+
+    # gráfico
+    nomes = [i.ticker for i in investimentos]
+    lucros = [i.lucro_prejuizo for i in investimentos]
+    if nomes and lucros:
+        # import plotly.express as px
+        fig = px.bar(x=nomes, y=lucros, title="Lucro/Prejuízo por investimento")
+        grafico_html = fig.to_html(full_html=False)
+    else:
+        grafico_html = "<p>Nenhum investimento cadastrado ainda.</p>"
+
+    return render_template(
+        "dashboardv2.html",
+        grafico_html=grafico_html,
+        investimentos=investimentos,
+        data_atual=data_atual
+    )
+
+@app.route("/investimento/remover/<int:investimento_id>")
+@login_required
+def remover_investimento(investimento_id):
+    investimento = Investimento.query.get_or_404(investimento_id)
+
+    # só permite remover se for do usuário logado
+    if investimento.user_id != current_user.id:
+        flash("Você não tem permissão para remover este investimento.", "danger")
+        return redirect(url_for("dashboard"))
+
+    db.session.delete(investimento)
+    db.session.commit()
+    flash("Investimento removido com sucesso!", "success")
+    return redirect(url_for("dashboard"))
+
+@app.route("/investimento/editar/<int:investimento_id>", methods=["GET", "POST"])
+@login_required
+def editar_investimento(investimento_id):
+    investimento = Investimento.query.get_or_404(investimento_id)
+
+    if investimento.user_id != current_user.id:
+        flash("Você não tem permissão para editar este investimento.", "danger")
+        return redirect(url_for("dashboard"))
+
+    if request.method == "POST":
+        investimento.nome = request.form["nome"]
+        investimento.valor_compra = float(request.form["valor_compra"])
+        investimento.cotacao_atual = float(request.form["cotacao_atual"])
+        investimento.saldo = investimento.cotacao_atual - investimento.valor_compra
+
+        db.session.commit()
+        flash("Investimento atualizado com sucesso!", "success")
+        return redirect(url_for("dashboard"))
+
+    return render_template("editar_investimento.html", investimento=investimento)
+
+
+@app.route("/relatorio", methods=["GET"])
+@login_required
+def relatorio():
+    investimentos = Investimento.query.filter_by(user_id=current_user.id).all()
+    relatorio_texto = gerar_relatorio_llm(investimentos)
+    return render_template("relatorio.html", relatorio=relatorio_texto)
