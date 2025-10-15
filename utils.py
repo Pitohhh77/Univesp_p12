@@ -5,7 +5,7 @@ import threading
 
 
 # Inicializa o modelo
-model = GPT4All("orca-mini-3b-gguf2-q4_0.gguf")
+#model = GPT4All("snip-340m-chat-v0.2.Q4_K_S.gguf")
 
 
 # --- Funções que analisam os investimentos separadamente ---
