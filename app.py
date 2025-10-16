@@ -18,7 +18,7 @@ app = Flask(__name__)
 # Se a variável não existir (rodando localmente), usa sua config local de fallback.
 app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get(
     'DATABASE_URL', 
-    'postgresql://devuser:devsenha@localhost:5432/flaskdb'
+    'postgresql://postgres:postgres@localhost:5432/flaskdb'
 )
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
