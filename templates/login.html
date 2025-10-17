@@ -1,18 +1,16 @@
 {% extends "base.html" %}
 
-{% block title %}Login{% endblock %}
+{% block title %}Login de Usuário{% endblock %}
 
 {% block content %}
 <div class="d-flex justify-content-center align-items-center" style="height: 80vh;">
   <div class="card shadow p-4" style="max-width: 400px; width: 100%;">
     <div class="card-body">
-      <h2 class="card-title text-center mb-4">Login</h2>
-
-      {% if erro %}
-        <div class="alert alert-danger">{{ erro }}</div>
-      {% endif %}
-
-      <form method="POST">
+      <h1 class="card-title text-center mb-4">Acesso ao Sistema</h1>
+      
+      <form method="POST" aria-labelledby="acessoTitulo">
+        <h2 id="acessoTitulo" class="visually-hidden">Formulário de Login</h2>
+        
         <div class="mb-3">
           <label for="usuario" class="form-label">Usuário</label>
           <input type="text" class="form-control" id="usuario" name="usuario" required>
@@ -28,12 +26,14 @@
         </div>
       </form>
 
-      <p class="text-center mt-3">
-        Não tem conta? <a href="{{ url_for('register') }}">Cadastre-se</a>
-      </p>
-      <p class="text-center">
-        <a href="{{ url_for('home') }}">Início</a>
-      </p>
+      <nav aria-label="Links de apoio">
+        <p class="text-center mt-3">
+          Não tem conta? <a href="{{ url_for('register') }}">Cadastre-se</a>
+        </p>
+        <p class="text-center">
+          <a href="{{ url_for('home') }}">Início</a>
+        </p>
+      </nav>
     </div>
   </div>
 </div>

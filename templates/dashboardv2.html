@@ -1,10 +1,10 @@
 {% extends "base.html" %}
 
-{% block title %}Dashboard – Minha App{% endblock %}
+{% block title %}Dashboard – Carteira de Investimentos{% endblock %}
 
 {% block extra_css %}
 <style>
-  /* Sidebar fixa */
+  /* Sidebar fixa - Usado o 'role' no nav para reforçar a semântica em navegadores antigos */
   .sidebar {
     height: 100vh;
     position: fixed;
@@ -14,11 +14,15 @@
     padding-top: 1rem;
     background-color: #f8f9fa;
   }
+  /* ... (restante do CSS do dashboardv2.html) ... */
   .sidebar .nav-link {
     color: #333;
   }
   .sidebar .nav-link.active {
     font-weight: bold;
+    /* Certifique-se de que o foco do teclado esteja bem visível */
+    outline: 2px solid blue; 
+    outline-offset: 2px;
   }
 
   /* Conteúdo principal */
@@ -51,42 +55,39 @@
 
 {% block content %}
 <div class="row">
-  <!-- Sidebar -->
-  <nav class="col-md-2 d-none d-md-block sidebar">
+  <nav class="col-md-2 d-none d-md-block sidebar" aria-label="Menu principal de navegação">
     <div class="position-sticky">
       <ul class="nav flex-column">
         <li class="nav-item">
-          <a class="nav-link active" href="#">Dashboard</a>
+          <a class="nav-link active" href="{{ url_for('dashboard') }}" aria-current="page">Dashboard</a>
         </li>
-      </ul>
+        </ul>
     </div>
   </nav>
 
-  <!-- Conteúdo principal -->
-  <main class="col-md-9 ms-sm-auto col-lg-10 main-content">
-  <h1 class="h2 mb-3">Dashboard</h1>
+  <div class="col-md-9 ms-sm-auto col-lg-10 main-content">
+  <h1 class="h2 mb-3">Dashboard da Carteira</h1>
 
-  <!-- Botões -->
   <button class="btn btn-success mb-3" data-bs-toggle="modal" data-bs-target="#modalInvestimento">
-    Adicionar investimento
+    Adicionar novo investimento
   </button>
-  <a href="{{ url_for('relatorio') }}" class="btn btn-info mb-3">Gerar Relatório LLM</a>
+  <a href="{{ url_for('relatorio') }}" class="btn btn-info mb-3">Gerar Relatório LLM de Análise</a>
 
-  <!-- Data atual -->
-  <p>Data atual: {{ data_atual.strftime('%d/%m/%Y %H:%M') }}</p>
+  <p>Data e hora atual: <time datetime="{{ data_atual.isoformat() }}">{{ data_atual.strftime('%d/%m/%Y %H:%M') }}</time></p>
 
-  <!-- Gráfico Plotly acima da tabela -->
-  {{ grafico_html|safe }}
+  <section aria-label="Gráfico de Lucro e Prejuízo por investimento">
+    {{ grafico_html|safe }}
+  </section>
 
-  <!-- Tabela de investimentos -->
   <div class="table-responsive mb-4">
     <table class="table table-striped table-sm">
+      <caption>Lista dos investimentos ativos na carteira do usuário.</caption>
       <thead>
         <tr>
           <th>Nome</th>
           <th>Valor de Compra</th>
           <th>Cotação Atual</th>
-          <th>Saldo</th>
+          <th>Lucro/Prejuízo (R$)</th>
           <th>Ações</th>
         </tr>
       </thead>
@@ -94,13 +95,16 @@
         {% for i in investimentos %}
         <tr>
           <td>{{ i.nome }}</td>
-          <td>{{ i.valor_pago }}</td>
-          <td>{{ i.cotacao_atual }}</td>
+          <td>R$ {{ "%.2f"|format(i.valor_pago) }}</td>
+          <td>R$ {{ "%.2f"|format(i.cotacao_atual) }}</td>
           <td class="{{ 'alert-positivo' if i.lucro_prejuizo > 0 else 'alert-negativo' }}">
             {{ "%.2f"|format(i.lucro_prejuizo) }}
+            <span class="visually-hidden"> ({{ 'Lucro' if i.lucro_prejuizo > 0 else 'Prejuízo' }})</span>
           </td>
           <td>
-            <a href="{{ url_for('remover_investimento', investimento_id=i.id) }}" class="btn btn-sm btn-danger">Remover</a>
+            <a href="{{ url_for('remover_investimento', investimento_id=i.id) }}" 
+               class="btn btn-sm btn-danger" 
+               aria-label="Remover investimento {{ i.nome }}">Remover</a>
           </td>
         </tr>
         {% endfor %}
@@ -112,21 +116,37 @@
       </tbody>
     </table>
   </div>
-</main>
+</div>
 
-<!-- Modal Adicionar Investimento -->
-<div class="modal fade" id="modalInvestimento" tabindex="-1">
+<div class="modal fade" id="modalInvestimento" tabindex="-1" aria-labelledby="modalInvestimentoLabel" aria-hidden="true">
   <div class="modal-dialog">
     <form method="POST" class="modal-content">
       <div class="modal-header">
-        <h5 class="modal-title">Adicionar Investimento</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        <h5 class="modal-title" id="modalInvestimentoLabel">Adicionar Novo Investimento</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
       </div>
       <div class="modal-body">
-        <input type="text" name="nome" class="form-control mb-2" placeholder="Nome do investimento" required>
-        <input type="text" name="codigo_BVMF" class="form-control mb-2" placeholder="Código BVMF (ex: MGLU3.SA)" required>
-        <input type="number" step="0.01" name="cotas" class="form-control mb-2" placeholder="Cotas" required>
-        <input type="number" step="0.01" name="valor_pago" class="form-control mb-2" placeholder="Valor pago (R$)" required>
+        
+        <div class="mb-2">
+          <label for="nomeInvestimento" class="form-label">Nome do Investimento</label>
+          <input type="text" name="nome" id="nomeInvestimento" class="form-control" placeholder="Ex: Ações Magazine Luiza" required>
+        </div>
+        
+        <div class="mb-2">
+          <label for="codigoBVMF" class="form-label">Código BVMF (Ticker)</label>
+          <input type="text" name="codigo_BVMF" id="codigoBVMF" class="form-control" placeholder="Ex: MGLU3" required>
+        </div>
+        
+        <div class="mb-2">
+          <label for="cotas" class="form-label">Quantidade de Cotas</label>
+          <input type="number" step="1" name="cotas" id="cotas" class="form-control" placeholder="Ex: 100" required>
+        </div>
+        
+        <div class="mb-2">
+          <label for="valorPago" class="form-label">Valor Pago Total (R$)</label>
+          <input type="number" step="0.01" name="valor_pago" id="valorPago" class="form-control" placeholder="Ex: 500.00" required>
+        </div>
+        
       </div>
       <div class="modal-footer">
         <button type="submit" class="btn btn-primary">Adicionar</button>
@@ -137,6 +157,5 @@
 {% endblock %}
 
 {% block extra_js %}
-<!-- Scripts Bootstrap (necessários para modal) -->
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 {% endblock %}

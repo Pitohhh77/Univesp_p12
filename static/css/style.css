@@ -1,0 +1,8 @@
+/* Exemplo no seu dashboardv2.html */
+  .sidebar .nav-link.active, 
+  .sidebar .nav-link:focus { /* Adicionado :focus */
+    font-weight: bold;
+    /* Torna o foco do teclado sempre visível e com alto contraste */
+    outline: 3px solid blue; 
+    outline-offset: 2px;
+  }

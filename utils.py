@@ -5,10 +5,10 @@ import threading
 
 
 # Inicializa o modelo
-model = GPT4All("snip-340m-chat-v0.2.Q4_K_S.gguf")
+#model = GPT4All("snip-340m-chat-v0.2.Q4_K_S.gguf")
 
 
-# --- Funções que analisam os investimentos separadamente ---
+# --- Funções que analisam os investimentos separadamente (Mantidas) ---
 
 def analisar_risco(investimentos):
     prompt = "Analise o risco dos seguintes investimentos:\n"
@@ -80,21 +80,23 @@ def resumo_geral(investimentos):
     return model.generate(prompt)
 
 
-# --- Função principal que chama as 10 análises ---
+# --- Função principal que chama as 10 análises (Melhoria de Acessibilidade) ---
 def gerar_relatorio_llm(investimentos):
     if not investimentos:
-        return "Nenhum investimento cadastrado."
+        return "<p>Nenhum investimento cadastrado. Adicione seus ativos para gerar o relatório.</p>"
 
     relatorio = ""
-    relatorio += "1. Risco:\n" + analisar_risco(investimentos) + "\n\n"
-    relatorio += "2. Lucro/Prejuízo:\n" + analisar_lucro_prejuizo(investimentos) + "\n\n"
-    relatorio += "3. Diversificação:\n" + analisar_diversificacao(investimentos) + "\n\n"
-    relatorio += "4. Compras/Vendas:\n" + sugerir_compras_vendas(investimentos) + "\n\n"
-    relatorio += "5. Alertas:\n" + alertas_importantes(investimentos) + "\n\n"
-    relatorio += "6. Dicas de melhoria:\n" + dicas_melhoria(investimentos) + "\n\n"
-    relatorio += "7. Oportunidades:\n" + oportunidades(investimentos) + "\n\n"
-    relatorio += "8. Monitoramento:\n" + monitoramento(investimentos) + "\n\n"
-    relatorio += "9. Motivação:\n" + motivacao(investimentos) + "\n\n"
-    relatorio += "10. Resumo geral:\n" + resumo_geral(investimentos)
+    # Alterado "1. Risco:\n" para <h2>1. Análise de Risco</h2>
+    # O texto gerado (analisar_risco) agora é envolvido em uma tag <p>
+    relatorio += "<h2>1. Análise de Risco</h2>" + "<p>" + analisar_risco(investimentos) + "</p>"
+    relatorio += "<h2>2. Lucro e Prejuízo</h2>" + "<p>" + analisar_lucro_prejuizo(investimentos) + "</p>"
+    relatorio += "<h2>3. Diversificação</h2>" + "<p>" + analisar_diversificacao(investimentos) + "</p>"
+    relatorio += "<h2>4. Sugestão de Compras e Vendas</h2>" + "<p>" + sugerir_compras_vendas(investimentos) + "</p>"
+    relatorio += "<h2>5. Alertas Importantes</h2>" + "<p>" + alertas_importantes(investimentos) + "</p>"
+    relatorio += "<h2>6. Dicas de Melhoria na Carteira</h2>" + "<p>" + dicas_melhoria(investimentos) + "</p>"
+    relatorio += "<h2>7. Oportunidades de Investimento</h2>" + "<p>" + oportunidades(investimentos) + "</p>"
+    relatorio += "<h2>8. Estratégias de Monitoramento</h2>" + "<p>" + monitoramento(investimentos) + "</p>"
+    relatorio += "<h2>9. Mensagens de Incentivo</h2>" + "<p>" + motivacao(investimentos) + "</p>"
+    relatorio += "<h2>10. Resumo Geral</h2>" + "<p>" + resumo_geral(investimentos) + "</p>"
 
     return relatorio
