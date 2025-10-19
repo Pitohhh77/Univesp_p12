@@ -1,15 +1,16 @@
 {% extends "base.html" %}
 
-{% block title %}Relatório de Análise de Investimentos{% endblock %}
+{% block title %}Relatório – Minha App{% endblock %}
 
 {% block content %}
-<div class="container mt-4">
-    <h1 class="h2 mb-4">Relatório de Análise de Investimentos</h1>
+<div class="main-content container mt-4">
+    <h1 class="h2 mb-4">Relatório de Investimentos</h1>
     
     <div class="relatorio-content bg-light p-3 border rounded">
-        {{ relatorio|safe }} 
+        {{ relatorio|safe }}
     </div>
-    
+
     <a href="{{ url_for('dashboard') }}" class="btn btn-secondary mt-3">Voltar ao Dashboard</a>
 </div>
 {% endblock %}
+#
