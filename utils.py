@@ -5,7 +5,7 @@ import threading
 
 
 # Inicializa o modelo
-#model = GPT4All("snip-340m-chat-v0.2.Q4_K_S.gguf")
+model = GPT4All("mistral-7b-instruct-v0.2.Q4_0.gguf")
 
 
 # --- Funções que analisam os investimentos separadamente (Mantidas) ---
