@@ -210,9 +210,9 @@ def editar_investimento(investimento_id):
 def relatorio():
     investimentos = Investimento.query.filter_by(user_id=current_user.id).all()
     try:
-        # CORREÇÃO CRÍTICA: Troca .table.columns por .__table__.columns
+        # Converta os investimentos para dicionários para passar para a função de IA
         ativos = [
-            {c.name: getattr(inv, c.name) for c in inv.__table__.columns} 
+            {c.name: getattr(inv, c.name) for c in inv.table.columns}
             for inv in investimentos
         ]
         # Chama a função que usa a API da Perplexity
@@ -225,4 +225,5 @@ def relatorio():
         else:
              relatorio_texto = f"Erro ao gerar relatório com IA: {str(e)}"
              
-    return render_template("relatorio.html", relatorio=relatorio_texto)
+    return render_template("relatorio.html", relatorio_texto=relatorio_texto)
+
