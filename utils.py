@@ -81,7 +81,7 @@ def resumo_geral(investimentos):
 
 
 # --- Função principal que chama as 10 análises ---
-def gerar_relatorio_carteira(investimentos):
+def gerar_relatorio_llm(investimentos):
     if not investimentos:
         return "Nenhum investimento cadastrado."
 

@@ -5,13 +5,23 @@ from flask_login import LoginManager, login_user, login_required, current_user
 from models import User, Investimento
 from werkzeug.security import check_password_hash
 from datetime import datetime
+from utils import gerar_relatorio_llm
 from perplexity_ia import *
 
 # importa o db de extensions, não de models
 from extensions import db
 
 app = Flask(__name__)
-app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql://devuser:devsenha@localhost:5432/flaskdb'
+
+import os 
+# Esta linha deve usar os.getenv para ler a variavel do Render
+# O segundo argumento é o fallback (valor padrao) para uso local.
+app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv(
+    "DATABASE_URL", 
+    'postgresql://devuser:devsenha@localhost:5432/flaskdb' # Valor padrão para DEV
+) 
+
+# ...
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db.init_app(app)  # inicializa SQLAlchemy com app
