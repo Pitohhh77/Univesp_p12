@@ -1,24 +1,23 @@
 import os
 import requests
-# CORREÇÃO: Remoção de 'from models import ...' e 'from app import *' 
-# para evitar dependência circular e falha no Gunicorn.
+import json # Adicionado para melhor tratamento de erro na resposta
 
+# URL da API da Perplexity
 PERPLEXITY_API_URL = "https://api.perplexity.ai/chat/completions"
-# CORREÇÃO: A chave deve vir apenas da variável de ambiente por segurança.
-PERPLEXITY_API_KEY = os.getenv("PERPLEXITY_API_KEY")
 
-# A função get_ativos_dict() foi removida pois não é necessária e causava erro de contexto.
+# A chave deve vir APENAS da variável de ambiente (por segurança)
+PERPLEXITY_API_KEY = os.getenv("PERPLEXITY_API_KEY")
 
 def gerar_relatorio_ia(prompt: str,
                       model: str = "sonar-pro",
-                      max_tokens: int = 800,
+                      max_tokens: int = 1500,
                       temperature: float = 0.5) -> str:
     """
     Chama a API da Perplexity AI para gerar um relatório com base no prompt.
     Retorna o texto da resposta.
     """
     if not PERPLEXITY_API_KEY:
-        # Erro claro se a chave não estiver na variável de ambiente
+        # Lança erro claro se a chave não estiver na variável de ambiente
         raise ValueError("Chave de API da Perplexity não configurada (PERPLEXITY_API_KEY)")
 
     headers = {
@@ -35,9 +34,8 @@ def gerar_relatorio_ia(prompt: str,
                     "Você é um analista de investimentos financeiro simpático e didático. "
                     "Sua função é gerar um relatório de análise de carteira de ativos "
                     "com base nos dados fornecidos pelo usuário. Use linguagem amigável, "
-                    "clara e objetiva. O relatório deve ter no máximo 800 tokens e ser "
-                    "formatado em Markdown. Não inclua cotações de mercado reais, "
-                    "apenas use os dados fornecidos. O relatório deve conter: "
+                    "clara e objetiva. O relatório deve ter no máximo 1500 tokens e ser "
+                    "formatado em Markdown (com títulos, negrito, listas). O relatório deve conter: "
                     "1. Resumo da Performance; 2. Análise de Risco e Diversificação; "
                     "3. Sugestões gerais (Compra/Venda/Manter)."
                 )
@@ -50,14 +48,15 @@ def gerar_relatorio_ia(prompt: str,
 
     try:
         response = requests.post(PERPLEXITY_API_URL, headers=headers, json=payload, timeout=30)
-        response.raise_for_status()
+        response.raise_for_status() # Lança exceção para erros 4xx/5xx
         data = response.json()
         return data["choices"][0]["message"]["content"]
-    except requests.RequestException as e:
+    except requests.exceptions.RequestException as e:
         error_text = getattr(e.response, 'text', '')
         raise RuntimeError(f"Erro ao chamar API Perplexity: {e} - {error_text}")
-    except (KeyError, IndexError):
+    except (KeyError, IndexError, json.JSONDecodeError):
         raise RuntimeError(f"Resposta inesperada da API Perplexity: {response.text}")
+
 
 def format_ativo(inv: dict) -> str:
     """

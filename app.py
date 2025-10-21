@@ -2,13 +2,14 @@ import yfinance as yf
 from flask import Flask, render_template, request, redirect, url_for, flash
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, login_user, login_required, current_user, logout_user
+# Importe User e Investimento de models (garantindo que o models exista)
 from models import User, Investimento
 from werkzeug.security import check_password_hash
 from datetime import datetime
 import os
 import plotly.express as px
 
-# IMPORTAÇÃO CORRETA: Traz a função da Perplexity AI
+# IMPORTAÇÃO CORRETA: Traz a função da Perplexity AI, corrigindo o erro de import
 from perplexity_ia import gerar_relatorio_carteira 
 
 # importa o db de extensions, não de models
@@ -17,7 +18,6 @@ from extensions import db
 app = Flask(__name__)
 
 # Tenta carregar a URL do BD da variável de ambiente (DATABASE_URL) que o Render irá fornecer.
-# Se a variável não existir (rodando localmente), usa sua config local de fallback.
 app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get(
     'DATABASE_URL', 
     'postgresql://postgres:postgres@localhost:5432/flaskdb'
@@ -26,11 +26,9 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db.init_app(app) # inicializa SQLAlchemy com app
 
-# CORREÇÃO CRÍTICA PARA O RENDER FREE:
 # Este bloco cria as tabelas no BD remoto na primeira vez que o servidor inicia (via Gunicorn).
 with app.app_context():
     db.create_all()
-# -----------------------------------------------------------------
 
 app.secret_key = 'univesppi2'
 
@@ -108,25 +106,27 @@ def logout():
 
 @app.route("/dashboard", methods=["GET", "POST"])
 @login_required
-
 def dashboard():
 
     data_atual = datetime.now()
 
     if request.method == "POST":
         nome = request.form["nome"]
-        ticker = request.form["codigo_BVMF"].upper() + ".SA"
+        # Garante que o ticker termine em .SA para B3
+        ticker_base = request.form["codigo_BVMF"].upper()
+        ticker = ticker_base + ".SA" if not ticker_base.endswith(".SA") else ticker_base
+        
         quantidade = float(request.form["cotas"])
         valor_pago = float(request.form["valor_pago"])
 
         cotacao = get_cotacao_atual(ticker)
-
+        
         saldo = cotacao * quantidade
         lucro_prejuizo = saldo - valor_pago
 
         novo = Investimento(
             ticker=ticker,
-            nome=ticker,
+            nome=nome,
             quantidade=quantidade,
             valor_pago=valor_pago,
             cotacao_atual=cotacao,
@@ -184,8 +184,8 @@ def editar_investimento(investimento_id):
 
     if request.method == "POST":
         # Pega a nova quantidade e valor total pago do formulário
-        quantidade = float(request.form["cotas"]) # Campo esperado no formulário de edição
-        valor_pago = float(request.form["valor_pago"]) # Campo esperado no formulário de edição
+        quantidade = float(request.form["cotas"]) 
+        valor_pago = float(request.form["valor_pago"])
         
         # O nome do ativo pode ser atualizado
         investimento.nome = request.form["nome"]
@@ -209,21 +209,23 @@ def editar_investimento(investimento_id):
 @login_required
 def relatorio():
     investimentos = Investimento.query.filter_by(user_id=current_user.id).all()
+    relatorio_texto = ""
     try:
-        # Converta os investimentos para dicionários para passar para a função de IA
+        # CORREÇÃO CRÍTICA DO SQLALCHEMY: Usa .__table__.columns
         ativos = [
-            {c.name: getattr(inv, c.name) for c in inv.table.columns}
+            {c.name: getattr(inv, c.name) for c in inv.__table__.columns} 
             for inv in investimentos
         ]
         # Chama a função que usa a API da Perplexity
         relatorio_texto = gerar_relatorio_carteira(ativos, current_user.username)
     except Exception as e:
-        # Tratamento de erro detalhado
+        # Tratamento de erro detalhado para aparecer no relatório caso a IA falhe
         print(f"Erro ao gerar relatório com IA: {str(e)}")
         if "Chave de API da Perplexity não configurada" in str(e) or "401 Client Error" in str(e):
-             relatorio_texto = "Erro: A **Chave de API da Perplexity (PERPLEXITY_API_KEY)** não está configurada ou é inválida. Por favor, verifique suas variáveis de ambiente."
+             relatorio_texto = "Erro: A **Chave de API da Perplexity (PERPLEXITY_API_KEY)** não está configurada ou é inválida. Por favor, verifique suas variáveis de ambiente no Render."
         else:
+             # Retorna a mensagem de erro detalhada para debug
              relatorio_texto = f"Erro ao gerar relatório com IA: {str(e)}"
              
+    # Retorna o template com a variável correta
     return render_template("relatorio.html", relatorio_texto=relatorio_texto)
-
