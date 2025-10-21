@@ -1,20 +1,13 @@
 import os
 import requests
-from models import User, Investimento
-from app import *
+# CORREÇÃO: Remoção de 'from models import ...' e 'from app import *' 
+# para evitar dependência circular e falha no Gunicorn.
 
 PERPLEXITY_API_URL = "https://api.perplexity.ai/chat/completions"
-PERPLEXITY_API_KEY = os.getenv("PERPLEXITY_API_KEY", "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")
+# CORREÇÃO: A chave deve vir apenas da variável de ambiente por segurança.
+PERPLEXITY_API_KEY = os.getenv("PERPLEXITY_API_KEY")
 
-def get_ativos_dict():
-    """
-    Retorna uma lista de dicionários com os dados dos investimentos.
-    """
-    with app.app_context():
-        return [
-            {c.name: getattr(inv, c.name) for c in inv.__table__.columns}
-            for inv in Investimento.query.all()
-        ]
+# A função get_ativos_dict() foi removida pois não é necessária e causava erro de contexto.
 
 def gerar_relatorio_ia(prompt: str,
                       model: str = "sonar-pro",
@@ -25,6 +18,7 @@ def gerar_relatorio_ia(prompt: str,
     Retorna o texto da resposta.
     """
     if not PERPLEXITY_API_KEY:
+        # Erro claro se a chave não estiver na variável de ambiente
         raise ValueError("Chave de API da Perplexity não configurada (PERPLEXITY_API_KEY)")
 
     headers = {
@@ -35,7 +29,19 @@ def gerar_relatorio_ia(prompt: str,
     payload = {
         "model": model,
         "messages": [
-            {"role": "system", "content": "Analise e sugira investimentos"},
+            {
+                "role": "system",
+                "content": (
+                    "Você é um analista de investimentos financeiro simpático e didático. "
+                    "Sua função é gerar um relatório de análise de carteira de ativos "
+                    "com base nos dados fornecidos pelo usuário. Use linguagem amigável, "
+                    "clara e objetiva. O relatório deve ter no máximo 800 tokens e ser "
+                    "formatado em Markdown. Não inclua cotações de mercado reais, "
+                    "apenas use os dados fornecidos. O relatório deve conter: "
+                    "1. Resumo da Performance; 2. Análise de Risco e Diversificação; "
+                    "3. Sugestões gerais (Compra/Venda/Manter)."
+                )
+            },
             {"role": "user", "content": prompt}
         ],
         "max_tokens": max_tokens,
@@ -53,25 +59,44 @@ def gerar_relatorio_ia(prompt: str,
     except (KeyError, IndexError):
         raise RuntimeError(f"Resposta inesperada da API Perplexity: {response.text}")
 
-def format_ativo(inv) -> str:
+def format_ativo(inv: dict) -> str:
     """
-    Formata os dados de um ativo para o prompt.
+    Formata os dados de um ativo (dicionário) para o prompt da IA.
     """
-    ticker = inv.get("ticker") if isinstance(inv, dict) else getattr(inv, "ticker", "")
-    nome = inv.get("nome") if isinstance(inv, dict) else getattr(inv, "nome", "")
-    quantidade = inv.get("quantidade") if isinstance(inv, dict) else getattr(inv, "quantidade", 0)
-    valor_pago = inv.get("valor_pago") if isinstance(inv, dict) else getattr(inv, "valor_pago", 0.0)
-    cotacao_atual = inv.get("cotacao_atual") if isinstance(inv, dict) else getattr(inv, "cotacao_atual", 0.0)
-    return f"- Ticker: {ticker}, Nome: {nome}, Quantidade: {quantidade}, Valor pago: {valor_pago:.2f}, Cotação atual: {cotacao_atual:.2f}"
+    # Acesso seguro via .get() pois inv é um dicionário
+    ticker = inv.get("ticker", "N/A")
+    nome = inv.get("nome", ticker)
+    quantidade = inv.get("quantidade", 0)
+    valor_pago = inv.get("valor_pago", 0.0)
+    cotacao_atual = inv.get("cotacao_atual", 0.0)
+    lucro_prejuizo = inv.get("lucro_prejuizo", 0.0) 
+
+    return (
+        f"- Ticker: {ticker}, Nome: {nome}, Quantidade: {quantidade}, "
+        f"Valor Total Pago: R${valor_pago:.2f}, Cotação Atual: R${cotacao_atual:.2f}, "
+        f"Lucro/Prejuízo: R${lucro_prejuizo:.2f}"
+    )
 
 def gerar_relatorio_carteira(ativos: list, usuario: str) -> str:
     """
     Monta um prompt específico para relatório da carteira do usuário
     e chama gerar_relatorio_ia().
     """
-    prompt = f"Relatório de investimentos para o usuário {usuario}.\nAtivos:\n"
-    prompt += "\n".join([format_ativo(inv) for inv in ativos])
-    prompt += (
-        "\n\nAnalise os ativos, calcule lucro/prejuízo, identifique pontos de atenção e sugira próximas ações.\n"
+    if not ativos:
+        return (
+            "## Relatório de Carteira - Vazio\n\n"
+            "Não foi possível gerar a análise. Adicione seus ativos na Dashboard "
+            "para que a Perplexity AI possa calcular o relatório!"
+        )
+
+    ativos_formatados = "\n".join([format_ativo(a) for a in ativos])
+
+    prompt = (
+        f"Gere um relatório de investimento para o usuário '{usuario}' baseado na seguinte carteira de ativos:\n\n"
+        f"--- Ativos ---\n"
+        f"{ativos_formatados}\n"
+        f"--------------\n\n"
+        "Com base nos dados fornecidos, realize a análise seguindo as instruções do System Role."
     )
+    
     return gerar_relatorio_ia(prompt)
