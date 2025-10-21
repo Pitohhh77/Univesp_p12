@@ -1,34 +1,20 @@
 import yfinance as yf
 from flask import Flask, render_template, request, redirect, url_for, flash
 from flask_sqlalchemy import SQLAlchemy
-from flask_login import LoginManager, login_user, login_required, current_user, logout_user
-# Importe User e Investimento de models (garantindo que o models exista)
+from flask_login import LoginManager, login_user, login_required, current_user
 from models import User, Investimento
 from werkzeug.security import check_password_hash
 from datetime import datetime
-import os
-import plotly.express as px
-
-# IMPORTAÇÃO CORRETA: Traz a função da Perplexity AI, corrigindo o erro de import
-from perplexity_ia import gerar_relatorio_carteira 
+from perplexity_ia import *
 
 # importa o db de extensions, não de models
 from extensions import db
 
 app = Flask(__name__)
-
-# Tenta carregar a URL do BD da variável de ambiente (DATABASE_URL) que o Render irá fornecer.
-app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get(
-    'DATABASE_URL', 
-    'postgresql://postgres:postgres@localhost:5432/flaskdb'
-)
+app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql://devuser:devsenha@localhost:5432/flaskdb'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-db.init_app(app) # inicializa SQLAlchemy com app
-
-# Este bloco cria as tabelas no BD remoto na primeira vez que o servidor inicia (via Gunicorn).
-with app.app_context():
-    db.create_all()
+db.init_app(app)  # inicializa SQLAlchemy com app
 
 app.secret_key = 'univesppi2'
 
@@ -49,7 +35,7 @@ def get_cotacao_atual(ticker):
 # --------------------LOGIN---------------------
 
 login_manager = LoginManager(app)
-login_manager.login_view = "login"
+login_manager.login_view = "login"  # se usuário não estiver logado redireciona para login
 
 @login_manager.user_loader
 def load_user(user_id):
@@ -91,7 +77,7 @@ def login():
         username = request.form["usuario"]
         password = request.form["senha"]
         user = User.query.filter_by(username=username).first()
-        if user and user.check_password(password):
+        if user and check_password_hash(user.password, password):
             login_user(user)
             return redirect(url_for("dashboard"))
         else:
@@ -106,27 +92,27 @@ def logout():
 
 @app.route("/dashboard", methods=["GET", "POST"])
 @login_required
+
 def dashboard():
 
-    data_atual = datetime.now()
+    data_atual = datetime.now()  # note que precisa usar datetime.datetime
 
     if request.method == "POST":
         nome = request.form["nome"]
-        # Garante que o ticker termine em .SA para B3
-        ticker_base = request.form["codigo_BVMF"].upper()
-        ticker = ticker_base + ".SA" if not ticker_base.endswith(".SA") else ticker_base
-        
+        ticker = request.form["codigo_BVMF"].upper() + ".SA"
         quantidade = float(request.form["cotas"])
         valor_pago = float(request.form["valor_pago"])
 
+
+
         cotacao = get_cotacao_atual(ticker)
-        
+
         saldo = cotacao * quantidade
         lucro_prejuizo = saldo - valor_pago
 
         novo = Investimento(
             ticker=ticker,
-            nome=nome,
+            nome=ticker,
             quantidade=quantidade,
             valor_pago=valor_pago,
             cotacao_atual=cotacao,
@@ -146,6 +132,7 @@ def dashboard():
     nomes = [i.ticker for i in investimentos]
     lucros = [i.lucro_prejuizo for i in investimentos]
     if nomes and lucros:
+        import plotly.express as px
         fig = px.bar(x=nomes, y=lucros, title="Lucro/Prejuízo por investimento")
         grafico_html = fig.to_html(full_html=False)
     else:
@@ -183,20 +170,10 @@ def editar_investimento(investimento_id):
         return redirect(url_for("dashboard"))
 
     if request.method == "POST":
-        # Pega a nova quantidade e valor total pago do formulário
-        quantidade = float(request.form["cotas"]) 
-        valor_pago = float(request.form["valor_pago"])
-        
-        # O nome do ativo pode ser atualizado
         investimento.nome = request.form["nome"]
-        investimento.quantidade = quantidade
-        investimento.valor_pago = valor_pago
-        
-        # Recalcula com a cotação atualizada ou a última conhecida
-        investimento.cotacao_atual = get_cotacao_atual(investimento.ticker)
-
-        investimento.saldo = investimento.cotacao_atual * investimento.quantidade
-        investimento.lucro_prejuizo = investimento.saldo - investimento.valor_pago
+        investimento.valor_compra = float(request.form["valor_compra"])
+        investimento.cotacao_atual = float(request.form["cotacao_atual"])
+        investimento.saldo = investimento.cotacao_atual - investimento.valor_compra
 
         db.session.commit()
         flash("Investimento atualizado com sucesso!", "success")
@@ -204,28 +181,25 @@ def editar_investimento(investimento_id):
 
     return render_template("editar_investimento.html", investimento=investimento)
 
-
 @app.route("/relatorio", methods=["GET"])
 @login_required
 def relatorio():
     investimentos = Investimento.query.filter_by(user_id=current_user.id).all()
-    relatorio_texto = ""
     try:
-        # CORREÇÃO CRÍTICA DO SQLALCHEMY: Usa .__table__.columns
+        # Converta os investimentos para dicionários, se necessário
         ativos = [
-            {c.name: getattr(inv, c.name) for c in inv.__table__.columns} 
+            {c.name: getattr(inv, c.name) for c in inv.table.columns}
             for inv in investimentos
         ]
-        # Chama a função que usa a API da Perplexity
         relatorio_texto = gerar_relatorio_carteira(ativos, current_user.username)
     except Exception as e:
-        # Tratamento de erro detalhado para aparecer no relatório caso a IA falhe
-        print(f"Erro ao gerar relatório com IA: {str(e)}")
-        if "Chave de API da Perplexity não configurada" in str(e) or "401 Client Error" in str(e):
-             relatorio_texto = "Erro: A **Chave de API da Perplexity (PERPLEXITY_API_KEY)** não está configurada ou é inválida. Por favor, verifique suas variáveis de ambiente no Render."
-        else:
-             # Retorna a mensagem de erro detalhada para debug
-             relatorio_texto = f"Erro ao gerar relatório com IA: {str(e)}"
-             
-    # Retorna o template com a variável correta
-    return render_template("relatorio.html", relatorio_texto=relatorio_texto)
+        relatorio_texto = f"Erro ao gerar relatório com IA: {str(e)}"
+    
+    return render_template("relatorio.html", relatorio=relatorio_texto)
+
+# -------------------- CRIAR TABELAS --------------------
+
+if __name__ == "__main__":
+    with app.app_context():
+        db.create_all()
+    app.run(debug=True)
