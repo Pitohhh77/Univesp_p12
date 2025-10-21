@@ -5,9 +5,11 @@ from flask_login import LoginManager, login_user, login_required, current_user, 
 from models import User, Investimento
 from werkzeug.security import check_password_hash
 from datetime import datetime
-from utils import gerar_relatorio_llm
 import os
 import plotly.express as px
+
+# IMPORTAÇÃO CORRETA: Traz a função da Perplexity AI
+from perplexity_ia import gerar_relatorio_carteira 
 
 # importa o db de extensions, não de models
 from extensions import db
@@ -181,10 +183,20 @@ def editar_investimento(investimento_id):
         return redirect(url_for("dashboard"))
 
     if request.method == "POST":
+        # Pega a nova quantidade e valor total pago do formulário
+        quantidade = float(request.form["cotas"]) # Campo esperado no formulário de edição
+        valor_pago = float(request.form["valor_pago"]) # Campo esperado no formulário de edição
+        
+        # O nome do ativo pode ser atualizado
         investimento.nome = request.form["nome"]
-        investimento.valor_compra = float(request.form["valor_compra"])
-        investimento.cotacao_atual = float(request.form["cotacao_atual"])
-        investimento.saldo = investimento.cotacao_atual - investimento.valor_compra
+        investimento.quantidade = quantidade
+        investimento.valor_pago = valor_pago
+        
+        # Recalcula com a cotação atualizada ou a última conhecida
+        investimento.cotacao_atual = get_cotacao_atual(investimento.ticker)
+
+        investimento.saldo = investimento.cotacao_atual * investimento.quantidade
+        investimento.lucro_prejuizo = investimento.saldo - investimento.valor_pago
 
         db.session.commit()
         flash("Investimento atualizado com sucesso!", "success")
@@ -197,5 +209,21 @@ def editar_investimento(investimento_id):
 @login_required
 def relatorio():
     investimentos = Investimento.query.filter_by(user_id=current_user.id).all()
-    relatorio_texto = gerar_relatorio_llm(investimentos)
+    try:
+        # Converta os investimentos para dicionários para passar para a função de IA
+        ativos = [
+            {c.name: getattr(inv, c.name) for c in inv.table.columns}
+            for inv in investimentos
+        ]
+        # Chama a função que usa a API da Perplexity
+        relatorio_texto = gerar_relatorio_carteira(ativos, current_user.username)
+    except Exception as e:
+        # Tratamento de erro detalhado
+        print(f"Erro ao gerar relatório com IA: {str(e)}")
+        if "Chave de API da Perplexity não configurada" in str(e) or "401 Client Error" in str(e):
+             relatorio_texto = "Erro: A **Chave de API da Perplexity (PERPLEXITY_API_KEY)** não está configurada ou é inválida. Por favor, verifique suas variáveis de ambiente."
+        else:
+             relatorio_texto = f"Erro ao gerar relatório com IA: {str(e)}"
+             
     return render_template("relatorio.html", relatorio=relatorio_texto)
+
