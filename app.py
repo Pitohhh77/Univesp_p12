@@ -5,7 +5,6 @@ from flask_login import LoginManager, login_user, login_required, current_user
 from models import User, Investimento
 from werkzeug.security import check_password_hash
 from datetime import datetime
-from utils import gerar_relatorio_llm
 from perplexity_ia import *
 
 # importa o db de extensions, não de models
@@ -201,7 +200,10 @@ def relatorio():
             {c.name: getattr(inv, c.name) for c in inv.table.columns}
             for inv in investimentos
         ]
+        # app.py, rota /relatorio
+# ...
         relatorio_texto = gerar_relatorio_carteira(ativos, current_user.username)
+        
     except Exception as e:
         relatorio_texto = f"Erro ao gerar relatório com IA: {str(e)}"
     

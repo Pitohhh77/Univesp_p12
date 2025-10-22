@@ -1,9 +1,9 @@
 Flask
 Flask-SQLAlchemy
-werkzeug
-psycopg2-binary
-gunicorn
-yfinance
 Flask-Login
+yfinance
+werkzeug
 plotly
 requests
+gunicorn  # Essencial para o deploy no Render
+psycopg2-binary # Necessário para se conectar ao PostgreSQL
