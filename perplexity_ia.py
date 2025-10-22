@@ -6,7 +6,7 @@ import json # Adicionado para melhor tratamento de erro na resposta
 PERPLEXITY_API_URL = "https://api.perplexity.ai/chat/completions"
 
 # A chave deve vir APENAS da variável de ambiente (por segurança)
-PERPLEXITY_API_KEY = os.getenv("PERPLEXITY_API_KEY")
+PERPLEXITY_API_KEY = os.getenv("PERPLEXITY_API_KEY", "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")
 
 def gerar_relatorio_ia(prompt: str,
                       model: str = "sonar-pro",
@@ -16,7 +16,7 @@ def gerar_relatorio_ia(prompt: str,
     Chama a API da Perplexity AI para gerar um relatório com base no prompt.
     Retorna o texto da resposta.
     """
-    
+
     if not PERPLEXITY_API_KEY:
         # Lança erro claro se a chave não estiver na variável de ambiente
         raise ValueError("Chave de API da Perplexity não configurada (PERPLEXITY_API_KEY)")
