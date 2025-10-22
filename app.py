@@ -20,7 +20,7 @@ app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv(
     "DATABASE_URL", 
     'postgresql://devuser:devsenha@localhost:5432/flaskdb' # Valor padrão para DEV
 ) 
-
+#
 # ...
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
