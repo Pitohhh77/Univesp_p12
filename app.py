@@ -193,16 +193,22 @@ def editar_investimento(investimento_id):
 @app.route("/relatorio", methods=["GET"])
 @login_required
 def relatorio():
+    # app.py, dentro da rota /relatorio
+
+# ...
     investimentos = Investimento.query.filter_by(user_id=current_user.id).all()
     try:
-        # Converta os investimentos para dicionários, se necessário
+        # Acessa as colunas da CLASSE Investimento, não da instância.
+        column_names = [c.name for c in Investimento.__table__.columns] 
+        
+        # Converte cada investimento em um dicionário
         ativos = [
-            {c.name: getattr(inv, c.name) for c in inv.table.columns}
+            {col: getattr(inv, col) for col in column_names}
             for inv in investimentos
         ]
-        # app.py, rota /relatorio
-# ...
+        
         relatorio_texto = gerar_relatorio_carteira(ativos, current_user.username)
+# ...
         
     except Exception as e:
         relatorio_texto = f"Erro ao gerar relatório com IA: {str(e)}"
