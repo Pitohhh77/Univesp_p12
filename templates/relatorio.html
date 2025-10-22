@@ -5,12 +5,22 @@
 {% block content %}
 <div class="main-content container mt-4">
     <h1 class="h2 mb-4">Relatório de Investimentos</h1>
-    
-    <div class="relatorio-content bg-light p-3 border rounded">
+
+    {# Exibe mensagens flash, se houver #}
+    {% with messages = get_flashed_messages() %}
+      {% if messages %}
+        <div class="alert alert-info">
+          {% for message in messages %}
+            <div>{{ message }}</div>
+          {% endfor %}
+        </div>
+      {% endif %}
+    {% endwith %}
+
+    <div class="relatorio-content bg-light p-3 border rounded" style="white-space: pre-line;">
         {{ relatorio|safe }}
     </div>
 
     <a href="{{ url_for('dashboard') }}" class="btn btn-secondary mt-3">Voltar ao Dashboard</a>
 </div>
 {% endblock %}
-#
