@@ -16,7 +16,7 @@ import os
 # Esta linha deve usar os.getenv para ler a variavel do Render
 # O segundo argumento é o fallback (valor padrao) para uso local.
 app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv(
-    "DATABASE_URL", 
+    "DATABASE_URL1", 
     'postgresql://devuser:devsenha@localhost:5432/flaskdb' # Valor padrão para DEV
 ) 
 #
